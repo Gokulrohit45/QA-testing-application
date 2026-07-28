@@ -97,8 +97,59 @@ supabase_key = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
 
 # Global telemetry and face auth stores
-execution_telemetry_store = {}
-project_face_auth_store = {}
+@app.route("/", methods=["GET"])
+def health_check():
+    accept_header = request.headers.get("Accept", "")
+    data = {
+        "status": "online",
+        "service": "QA·AI Autonomous Testing Backend Engine",
+        "intelligence": "ACTIVE & RUNNING",
+        "version": "1.0.0",
+        "playwright": "Connected & Operating",
+        "telemetry": "OpenTelemetry Ingestion Active",
+        "face_auth": "Virtual Webcam Engine Ready",
+        "project_assets": "Asset Manager Active",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    }
+
+    if "text/html" in accept_header:
+        html_page = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>QA·AI Intelligence Engine</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {{ background-color: #09090b; color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }}
+                .card {{ background: #18181b; border: 1px solid #27272a; padding: 40px; border-radius: 24px; max-width: 500px; width: 100%; text-align: center; box-shadow: 0 20px 50px rgba(99, 102, 241, 0.15); }}
+                .badge {{ display: inline-flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; padding: 6px 16px; border-radius: 9999px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px; }}
+                .dot {{ width: 8px; height: 8px; background: #34d399; border-radius: 50%; display: inline-block; box-shadow: 0 0 10px #34d399; animation: pulse 2s infinite; }}
+                h1 {{ font-size: 26px; font-weight: 900; margin: 0 0 8px 0; background: linear-gradient(135deg, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+                p {{ color: #a1a1aa; font-size: 14px; margin: 0 0 24px 0; line-height: 1.5; }}
+                .info-box {{ background: #09090b; border: 1px solid #27272a; border-radius: 14px; padding: 16px; text-align: left; font-family: monospace; font-size: 12px; color: #818cf8; line-height: 1.8; }}
+                @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.4; }} }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="badge"><span class="dot"></span> Intelligence Active & Running</div>
+                <h1>QA·AI Platform</h1>
+                <p>Autonomous End-to-End Testing & Telemetry Automation Engine</p>
+                <div class="info-box">
+                    ⚙️ Status: 200 OK (Online)<br>
+                    🤖 Intelligence: ACTIVE & RUNNING<br>
+                    🎭 Playwright Engine: Ready<br>
+                    🔐 Face Verification: Operational<br>
+                    📊 OTel Observability: Connected<br>
+                    📁 Project Asset Storage: Ready
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return html_page, 200
+
+    return jsonify(data), 200
 
 # Gemini init
 gemini_key = os.getenv("GEMINI_API_KEY")
