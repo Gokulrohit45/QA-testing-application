@@ -97,6 +97,9 @@ supabase_key = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
 
 # Global telemetry and face auth stores
+execution_telemetry_store = {}
+project_face_auth_store = {}
+
 @app.route("/", methods=["GET"])
 def health_check():
     accept_header = request.headers.get("Accept", "")
@@ -1610,39 +1613,87 @@ def manage_project_face_auth(project_id):
     if request.method == "OPTIONS":
         return jsonify({"status": "ok"}), 200
 
+    upload_dir = os.path.join(app.root_path, "uploads", "face_videos")
+    os.makedirs(upload_dir, exist_ok=True)
+    config_file = os.path.join(upload_dir, f"config_proj_{project_id}.json")
+
+    # Helper: read disk config if available
+    def load_disk_cfg():
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, "r") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return None
+
     if request.method == "GET":
-        cfg = project_face_auth_store.get(project_id, {
+        disk_cfg = load_disk_cfg()
+        mem_cfg = project_face_auth_store.get(project_id)
+        
+        cfg = {
             "face_auth_enabled": False,
             "face_video_url": None,
             "face_video_path": None
-        })
-        try:
-            p_res = supabase.table("projects").select("*").eq("id", project_id).execute()
-            if p_res.data and len(p_res.data) > 0:
-                p_data = p_res.data[0]
-                cfg["face_auth_enabled"] = p_data.get("face_auth_enabled", cfg.get("face_auth_enabled", False))
-                cfg["face_video_url"] = p_data.get("face_video_url", cfg.get("face_video_url"))
-                cfg["face_video_path"] = p_data.get("face_video_path", cfg.get("face_video_path"))
-        except Exception:
-            pass
+        }
+
+        # Merge memory, disk, and Supabase data
+        if mem_cfg:
+            cfg.update({k: v for k, v in mem_cfg.items() if v is not None})
+        if disk_cfg:
+            for k, v in disk_cfg.items():
+                if v is not None or k == "face_auth_enabled":
+                    cfg[k] = v
+
+        if supabase:
+            try:
+                p_res = supabase.table("projects").select("face_auth_enabled, face_video_url, face_video_path").eq("id", project_id).execute()
+                if p_res.data and len(p_res.data) > 0:
+                    p_data = p_res.data[0]
+                    if p_data.get("face_auth_enabled") is not None:
+                        cfg["face_auth_enabled"] = bool(p_data["face_auth_enabled"])
+                    if p_data.get("face_video_url"):
+                        cfg["face_video_url"] = p_data["face_video_url"]
+                    if p_data.get("face_video_path"):
+                        cfg["face_video_path"] = p_data["face_video_path"]
+            except Exception as e:
+                safe_print(f"[Face Auth DB Sync Warning] {e}")
+
+        # Check if local video file exists on disk to construct working URL if missing
+        if not cfg.get("face_video_url"):
+            for fname in os.listdir(upload_dir):
+                if fname.startswith(f"face_proj_{project_id}_") and not fname.endswith(".json") and not fname.endswith(".y4m"):
+                    base_host = request.host_url.rstrip('/')
+                    cfg["face_video_url"] = f"{base_host}/uploads/face_videos/{fname}"
+                    cfg["face_video_path"] = os.path.abspath(os.path.join(upload_dir, fname))
+                    cfg["face_auth_enabled"] = True
+                    break
+
+        project_face_auth_store[project_id] = cfg
         return jsonify(cfg), 200
 
     if request.method == "POST":
-        enabled_str = request.form.get("face_auth_enabled", "true")
-        enabled = str(enabled_str).lower() in ["true", "1", "yes"]
-        file = request.files.get("video")
+        disk_cfg = load_disk_cfg() or {}
+        existing_cfg = project_face_auth_store.get(project_id) or disk_cfg
 
-        existing_cfg = project_face_auth_store.get(project_id, {})
+        enabled_param = request.form.get("face_auth_enabled")
+        if enabled_param is not None:
+            enabled = str(enabled_param).lower() in ["true", "1", "yes"]
+        else:
+            enabled = existing_cfg.get("face_auth_enabled", True)
+
+        file = request.files.get("video")
         video_url = existing_cfg.get("face_video_url")
         video_path = existing_cfg.get("face_video_path")
 
-        if file:
+        if file and file.filename:
             filename = f"face_proj_{project_id}_{int(time.time())}_{file.filename}"
-            upload_dir = os.path.join(app.root_path, "uploads", "face_videos")
-            os.makedirs(upload_dir, exist_ok=True)
-            video_path = os.path.abspath(os.path.join(upload_dir, filename))
-            file.save(video_path)
-            video_url = f"http://localhost:5000/uploads/face_videos/{filename}"
+            save_path = os.path.abspath(os.path.join(upload_dir, filename))
+            file.save(save_path)
+            video_path = save_path
+            base_host = request.host_url.rstrip('/')
+            video_url = f"{base_host}/uploads/face_videos/{filename}"
+            enabled = True
 
         new_cfg = {
             "face_auth_enabled": enabled,
@@ -1651,27 +1702,42 @@ def manage_project_face_auth(project_id):
         }
         project_face_auth_store[project_id] = new_cfg
 
+        # Save to disk config file
         try:
-            supabase.table("projects").update(new_cfg).eq("id", project_id).execute()
-        except Exception:
-            pass
+            with open(config_file, "w") as f:
+                json.dump(new_cfg, f)
+        except Exception as e:
+            safe_print(f"[Face Auth Disk Save Error] {e}")
+
+        # Sync with Supabase projects table
+        if supabase:
+            try:
+                supabase.table("projects").update(new_cfg).eq("id", project_id).execute()
+            except Exception as e:
+                safe_print(f"[Face Auth DB Save Warning] {e}")
 
         return jsonify({"status": "success", "config": new_cfg}), 200
 
     if request.method == "DELETE":
-        project_face_auth_store[project_id] = {
+        empty_cfg = {
             "face_auth_enabled": False,
             "face_video_url": None,
             "face_video_path": None
         }
-        try:
-            supabase.table("projects").update({
-                "face_auth_enabled": False,
-                "face_video_url": None,
-                "face_video_path": None
-            }).eq("id", project_id).execute()
-        except Exception:
-            pass
+        project_face_auth_store[project_id] = empty_cfg
+
+        if os.path.exists(config_file):
+            try:
+                os.remove(config_file)
+            except Exception:
+                pass
+
+        if supabase:
+            try:
+                supabase.table("projects").update(empty_cfg).eq("id", project_id).execute()
+            except Exception:
+                pass
+
         return jsonify({"status": "success", "message": "Face verification video deleted"}), 200
 
 
