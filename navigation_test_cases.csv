@@ -1,0 +1,75 @@
+Test ID,Module / Category,Test Scenario / Action,Natural Language Command,Expected Result / Target
+1,Home Navigation,Click VTAB SQUARE logo/brand,click VTAB SQUARE,Navigate to dashboard/home page
+2,Home Navigation,Click Home menu item,click Home,Navigate to dashboard/home page
+3,Employee Module Navigation (L3+),Click Employees menu under Employee module,click Employees,Navigate to #/employees page
+4,Employee Module Navigation (L3+),Click Interns menu under Employee module,click Interns,Navigate to #/interns page
+5,Employee Module Navigation (L3+),Click Team Management menu under Employee module,click Team Management,Navigate to #/team-management page
+6,Employee Module Navigation (L3+),Click Employee module toggle,click Employees,Expand/collapse Employee module submenu
+7,Communication Navigation,Click Inbox menu item,click Inbox,Navigate to #/inbox page
+8,Communication Navigation,Click Chat menu item,click Chat,Navigate to #/chat page
+9,Onboarding Navigation (L3+),Click Onboarding menu item,click Onboarding,Navigate to #/onboarding page
+10,Time Tracker Navigation,Click Time Tracker toggle,click Time Tracker,Expand/collapse Time Tracker submenu
+11,Time Tracker Navigation,Click My Tasks submenu,click My Tasks,Navigate to #/time-my-tasks page
+12,Time Tracker Navigation,Click My Timesheet submenu,click My Timesheet,Navigate to #/time-my-timesheet page
+13,Time Tracker Navigation,Click Projects submenu,click Projects,Navigate to #/time-projects page
+14,Time Tracker Navigation - Admin Only,Click My Team Timesheet submenu (Admin),click My Team Timesheet,Navigate to #/time-team-timesheet page
+15,Time Tracker Navigation - L3+,Click Clients submenu (L3+),click Clients,Navigate to #/time-clients page
+16,Attendance Tracker Navigation,Click Attendance Tracker toggle,click Attendance Tracker,Expand/collapse Attendance submenu
+17,Attendance Tracker Navigation,Click My Attendance submenu,click My Attendance,Navigate to #/attendance-my page
+18,Attendance Tracker Navigation,Click Holidays submenu,click Holidays,Navigate to #/attendance-holidays page
+19,Attendance Tracker Navigation - Admin Only,Click My Team Attendance submenu (Admin),click My Team Attendance,Navigate to #/attendance-team page
+20,Leave Tracker Navigation,Click Leave Tracker toggle,click Leave Tracker,Expand/collapse Leave submenu
+21,Leave Tracker Navigation,Click My Leaves submenu,click My Leaves,Navigate to #/leave-my page
+22,Leave Tracker Navigation,Click Comp Off submenu,click Comp Off,Navigate to #/compoff page
+23,Leave Tracker Navigation - Admin Only,Click My Team Leaves submenu (Admin),click My Team Leaves,Navigate to #/leave-team page
+24,Assets Navigation,Click Assets menu item,click Assets,Navigate to #/assets page
+25,Settings Navigation - Admin Only,Click Settings toggle (Admin),click Settings,Expand/collapse Settings submenu
+26,Settings Navigation - Admin Only,Click Leave Settings submenu (Admin),click Leave Settings,Navigate to #/leave-settings page
+27,Settings Navigation - Admin Only,Click Login Settings submenu (Admin),click Login Settings,Navigate to #/login-settings page
+28,URL Navigation,Browser back button,browser back,Navigate to previous page correctly
+29,URL Navigation,Browser forward button,browser forward,Navigate forward correctly
+30,Active Menu Highlighting,Current page menu item highlighted,verify_text Active Styling,Active menu item has distinct styling
+31,Active Menu Highlighting,Parent module highlighted when submenu active,verify_text Expanded,Parent group remains expanded when child active
+32,Menu State Persistence,Expanded menu groups remain open,verify_text Menu State,Menu groups stay expanded across navigation
+33,Menu State Persistence,Menu state remembered after refresh,reload page,Previous menu expansion state restored
+34,Header Navigation,Header search functionality,fill Search with Gokul,Search bar focuses and searches employees
+35,Header Navigation,Quick timer check-in/out,click CHECK IN,Timer button works from header
+36,Header Navigation,Theme toggle,click Theme Toggle,Click moon/sun icon to toggle theme
+37,Header Navigation,Notifications bell,click Notifications,Click to view notifications dropdown
+38,Header Navigation,User profile dropdown,click Profile,Click avatar to show user menu
+39,Header Navigation,Profile from user menu,click My Profile,Click Profile in dropdown
+40,Header Navigation,Logout from user menu,click Logout,Click Logout
+41,Breadcrumb Navigation,Breadcrumb display on nested pages,verify_text Home > Section,Breadcrumbs show current page hierarchy
+42,Breadcrumb Navigation,Click breadcrumb items,click Home,Navigate to parent levels correctly
+43,Breadcrumb Navigation,Breadcrumb on employee detail,verify_text Home > Employees,Show Home > Employees > Employee Name
+44,Breadcrumb Navigation,Breadcrumb on intern detail,verify_text Home > Interns,Show Home > Interns > Intern Name
+45,Loading States,Page loading indicator,verify_text Loading,Show spinner or skeleton while loading
+46,Loading States,Navigation loading state,verify_text Loading,Visual feedback during navigation
+47,Error Navigation,Network error during navigation,verify_text Network Error,Show appropriate error message
+48,Error Navigation,404 error handling,verify_text Page Not Found,Show friendly error page
+49,Tab Navigation,Open multiple browser tabs,new_tab,Each tab maintains independent state
+50,Accessibility,Focus indicators,press Tab,Visible focus on keyboard navigation
+51,Performance,Page transition speed,wait 2,Navigation completes within 2 seconds
+52,Performance,Menu responsiveness,click Menu,Menu expansion/collapse instant
+53,Performance,Search response time,wait 1,Search results appear within 500ms
+54,Filter Persistence,Apply employee filters,click Filter,Navigate away and back
+55,Pagination Navigation,Navigate employee pages,click Next Page,Maintain search/sort state
+56,Pagination Navigation,Navigate large datasets,click Page 2,Page numbers work correctly
+57,Form Navigation,Navigate after form submit,click Submit,Form data cleared appropriately
+58,Contextual Navigation,Edit employee -> back to list,click Back,Return to list
+59,Contextual Navigation,View details -> back to list,click Back,Return to same page/scroll position
+60,Role-Based Navigation,Admin sees all menu items,verify_text Admin,All modules and submenus visible
+61,Role-Based Navigation,Manager sees limited items,verify_text Manager,Team-focused options only
+62,Role-Based Navigation,Employee sees basic items,verify_text Employee,Personal modules only
+63,Role-Based Navigation,Menu items update on role change,click Switch Role,Navigation updates when role changes
+64,Session Navigation,After logout,click Logout,Try protected page
+65,Session Navigation,After login,click Sign In,Return to intended page
+66,Browser Compatibility,Chrome navigation,open https://officehub360.vtabsquare.com,All navigation works in Chrome
+67,Browser Compatibility,Firefox navigation,open https://officehub360.vtabsquare.com,All navigation works in Firefox
+68,Browser Compatibility,Safari navigation,open https://officehub360.vtabsquare.com,All navigation works in Safari
+69,Browser Compatibility,Edge navigation,open https://officehub360.vtabsquare.com,All navigation works in Edge
+70,Animation,Menu expand/collapse animation,click Menu,Smooth transitions
+71,Animation,Page transition animation,wait 1,Subtle animations enhance UX
+72,Visual Feedback,Hover states on menu items,hover Menu,Visual feedback on hover
+73,Visual Feedback,Active state indicators,verify_text Active,Clear indication of current location
+74,Search Navigation,Search result selection,click Search Result,Click result to navigate to record

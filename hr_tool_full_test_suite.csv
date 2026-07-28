@@ -1,0 +1,42 @@
+Step,Action,Target,Value/Expected,Status
+1,goto,https://officehub360.vtabsquare.com/login.html,,PASSED
+2,fill,Email address,gokulnathm.vtab@gmail.com,PASSED
+3,fill,Password,Gokulrohit@45,PASSED
+4,click,Sign In,,PASSED
+5,wait,,5,PASSED
+6,click,Verify Identity,,PASSED
+7,wait,,5,PASSED
+8,verify_text,"Welcome, Gokulnath!",,PASSED
+9,click,VTAB SQUARE,,PASSED
+10,click,Home,,PASSED
+11,verify_text,Welcome,,PASSED
+12,click,Employee,,PASSED
+13,click,Team Management,,PASSED
+14,verify_text,Team Management,,PASSED
+15,click,Inbox,,PASSED
+16,verify_text,Inbox,,PASSED
+17,click,Time Tracker,,PASSED
+18,click,My Tasks,,PASSED
+19,verify_text,My Tasks,,PASSED
+20,click,My Timesheet,,PASSED
+21,verify_text,My Timesheet,,PASSED
+22,click,Projects,,PASSED
+23,verify_text,Projects,,PASSED
+24,click,Attendance Tracker,,PASSED
+25,click,My Attendance,,PASSED
+26,verify_text,My Attendance,,PASSED
+27,click,Holidays,,PASSED
+28,verify_text,Holidays management,,PASSED
+29,click,Leave Tracker,,PASSED
+30,click,My Leaves,,PASSED
+31,verify_text,My Leaves,,PASSED
+32,click,Comp Off,,PASSED
+33,verify_text,Compensatory Off,,PASSED
+34,click,Assets,,PASSED
+35,verify_text,Assets,,PASSED
+36,click,Gokulnath Muthusamy,,PASSED
+37,click,profile,,PASSED
+38,verify_text,python developer,,PASSED
+39,click,close,,PASSED
+40,click,Gokulnath Muthusamy,,PASSED
+41,click,Logout,,PASSED

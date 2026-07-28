@@ -1,0 +1,30 @@
+# Environment Variables & Secrets (CRITICAL - DO NOT COMMIT)
+.env
+.env.local
+.env.*.local
+*.env
+frontend/.env
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+
+# Uploads & Media Assets (Server storage)
+uploads/
+frontend/dist/
+dist/
+build/
+
+# IDE & OS Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
