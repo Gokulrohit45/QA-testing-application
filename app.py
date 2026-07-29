@@ -705,6 +705,7 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
                     "--use-fake-device-for-media-stream"
                 ])
                 if face_video_path and os.path.exists(face_video_path):
+                    active_video_capture_path = None
                     if face_video_path.lower().endswith(".y4m"):
                         active_video_capture_path = face_video_path
                         print(f"[Chromium Fake Webcam Init] Loaded Y4M stream: {active_video_capture_path}")
@@ -714,17 +715,20 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
                         perm_y4m_path = os.path.abspath(os.path.join(upload_dir, f"perm_proj_{project_id}.y4m"))
                         
                         if not os.path.exists(perm_y4m_path) or os.path.getsize(perm_y4m_path) == 0:
-                            print(f"[Face Auth Video Converter] Pre-converting MP4 to permanent Y4M stream...")
-                            convert_mp4_to_y4m(face_video_path, perm_y4m_path)
+                            try:
+                                print(f"[Face Auth Video Converter] Pre-converting MP4 to permanent Y4M stream...")
+                                convert_mp4_to_y4m(face_video_path, perm_y4m_path)
+                            except Exception as conv_err:
+                                print(f"[Face Auth Video Converter Warning] {conv_err}")
 
                         if os.path.exists(perm_y4m_path) and os.path.getsize(perm_y4m_path) > 0:
                             active_video_capture_path = perm_y4m_path
                             print(f"[Chromium Fake Webcam Init] SUCCESS! Loaded permanent Y4M stream: {active_video_capture_path}")
                         else:
                             active_video_capture_path = face_video_path
-                            print(f"[Chromium Fake Webcam Init Warning] Conversion failed, using original file: {active_video_capture_path}")
 
-                    chrome_args.append(f"--use-file-for-fake-video-capture={active_video_capture_path}")
+                    if active_video_capture_path and os.path.exists(active_video_capture_path):
+                        chrome_args.append(f"--use-file-for-fake-video-capture={active_video_capture_path}")
 
             if browser_name.lower() == "firefox":
                 browser = p.firefox.launch(headless=headless)
@@ -1103,8 +1107,21 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
 
     except Exception as run_err:
         total_duration = int(time.time() - start_time)
+        error_txt = str(run_err)
+        safe_print(f"Execution run #{execution_id} failed: {error_txt}")
+        try:
+            supabase.table("execution_logs").insert({
+                "execution_id": execution_id,
+                "step_number": 1,
+                "action": "Browser Launch / Network Init",
+                "raw_command": f"init_browser {error_txt[:100]}",
+                "status": "failed",
+                "error_message": f"Execution failed: {error_txt[:300]}",
+                "duration_ms": int(total_duration * 1000)
+            }).execute()
+        except Exception:
+            pass
         supabase.table("executions").update({"status": "Failed", "duration": total_duration}).eq("id", execution_id).execute()
-        safe_print(f"Execution run #{execution_id} failed: {str(run_err)}")
     finally:
         active_runs.discard(execution_id)
         if temp_y4m_file and os.path.exists(temp_y4m_file):
