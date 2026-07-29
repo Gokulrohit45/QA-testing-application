@@ -57,15 +57,6 @@ export default function Header({ selectedProject }) {
 
       {/* Right actions */}
       <div className="flex items-center gap-2">
-        {/* Theme Toggle */}
-        <button
-          onClick={toggle}
-          title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-base hover:bg-slate-100 dark:hover:bg-zinc-900 text-secondary hover:text-primary transition-all duration-200"
-        >
-          {dark ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
-
         {/* Avatar */}
         <Link to="/profile" title={currentUser?.user_metadata?.full_name || 'Profile'}>
           <div className="w-8 h-8 rounded-lg gradient-brand flex items-center justify-center text-white font-black text-xs shadow-sm hover:opacity-90 transition-opacity uppercase">

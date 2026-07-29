@@ -48,15 +48,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen page-bg flex items-center justify-center p-6 relative overflow-hidden transition-colors duration-200">
-      {/* Theme Toggle */}
-      <div className="absolute top-4 right-4 z-20">
-        <button
-          onClick={toggle}
-          className="w-9 h-9 flex items-center justify-center rounded-xl border border-base bg-white dark:bg-zinc-900 text-secondary hover:text-primary transition-all duration-200 shadow-sm"
-        >
-          {dark ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
-      </div>
 
       {/* Ambient glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
