@@ -695,6 +695,31 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
             except Exception:
                 pass
 
+    if face_auth_enabled:
+        upload_dir = os.path.join(app.root_path, "uploads", "face_videos")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        if not face_video_path or not os.path.exists(face_video_path):
+            for fname in os.listdir(upload_dir):
+                if fname.startswith(f"face_proj_{project_id}_") and not fname.endswith(".json") and not fname.endswith(".y4m"):
+                    face_video_path = os.path.abspath(os.path.join(upload_dir, fname))
+                    break
+
+        if (not face_video_path or not os.path.exists(face_video_path)) and face_video_url:
+            try:
+                import requests
+                safe_print(f"[Face Auth Cloud Sync] Downloading face video for project #{project_id} from {face_video_url}...")
+                resp = requests.get(face_video_url, timeout=15)
+                if resp.status_code == 200 and len(resp.content) > 1000:
+                    local_filename = f"face_proj_{project_id}_cloud.mp4"
+                    local_target = os.path.abspath(os.path.join(upload_dir, local_filename))
+                    with open(local_target, "wb") as f:
+                        f.write(resp.content)
+                    face_video_path = local_target
+                    safe_print(f"[Face Auth Cloud Sync SUCCESS] Saved cloud video to: {face_video_path} ({len(resp.content)} bytes)")
+            except Exception as dl_err:
+                safe_print(f"[Face Auth Cloud Sync Warning] {dl_err}")
+
     initial_spans = []
     if face_auth_enabled:
         initial_spans = [
@@ -1751,6 +1776,32 @@ def manage_project_face_auth(project_id):
             base_host = request.host_url.rstrip('/')
             video_url = f"{base_host}/uploads/face_videos/{filename}"
             enabled = True
+
+            # Sync video file directly to Supabase Storage bucket 'screenshots' for global cloud access
+            if supabase:
+                try:
+                    with open(save_path, "rb") as vf:
+                        v_bytes = vf.read()
+                        supa_path = f"face_proj_{project_id}.mp4"
+                        try:
+                            supabase.storage.from_("screenshots").upload(
+                                path=supa_path,
+                                file=v_bytes,
+                                file_options={"content-type": "video/mp4", "upsert": "true"}
+                            )
+                        except Exception:
+                            try:
+                                supabase.storage.from_("screenshots").update(
+                                    path=supa_path,
+                                    file=v_bytes,
+                                    file_options={"content-type": "video/mp4"}
+                                )
+                            except Exception:
+                                pass
+                        video_url = supabase.storage.from_("screenshots").get_public_url(supa_path)
+                        safe_print(f"[Supabase Storage Video Sync] URL: {video_url}")
+                except Exception as supa_vid_err:
+                    safe_print(f"[Supabase Video Upload Warning] {supa_vid_err}")
 
         new_cfg = {
             "face_auth_enabled": enabled,
