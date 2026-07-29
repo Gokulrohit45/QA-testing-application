@@ -887,7 +887,7 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                   
                   {faceVideoUrl ? (
                     <div className="space-y-3">
-                      <video controls src={faceVideoUrl} className="w-full max-h-48 rounded-lg border border-slate-800 bg-black" />
+                      <video controls muted preload="metadata" crossOrigin="anonymous" src={faceVideoUrl} className="w-full max-h-48 rounded-lg border border-slate-800 bg-black" />
                       <div className="flex gap-2">
                         <label className="flex-1 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold text-center cursor-pointer transition-colors flex items-center justify-center gap-1.5">
                           <Upload size={12}/> Replace Video
