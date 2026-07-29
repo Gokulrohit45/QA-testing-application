@@ -5,8 +5,9 @@ import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../supabaseClient';
 
 export default function Login() {
-  const [email, setEmail]       = useState('gokulnath96880@gmail.com');
-  const [password, setPassword] = useState('gokul@45');
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem('remember_me') === 'true');
+  const [email, setEmail]       = useState(() => localStorage.getItem('remember_me') === 'true' ? (localStorage.getItem('saved_email') || '') : '');
+  const [password, setPassword] = useState(() => localStorage.getItem('remember_me') === 'true' ? (localStorage.getItem('saved_password') || '') : '');
   const [showPwd, setShowPwd]   = useState(false);
   const [loading, setLoading]   = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -27,6 +28,15 @@ export default function Login() {
       if (error) {
         setErrorMsg(error.message);
       } else {
+        if (rememberMe) {
+          localStorage.setItem('remember_me', 'true');
+          localStorage.setItem('saved_email', email);
+          localStorage.setItem('saved_password', password);
+        } else {
+          localStorage.removeItem('remember_me');
+          localStorage.removeItem('saved_email');
+          localStorage.removeItem('saved_password');
+        }
         navigate('/');
       }
     } catch (err) {
@@ -98,6 +108,18 @@ export default function Login() {
                   {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-secondary hover:text-primary transition-colors select-none">
+                <input 
+                  type="checkbox" 
+                  checked={rememberMe} 
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 dark:border-zinc-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span>Remember me</span>
+              </label>
             </div>
 
             <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 mt-2 text-xs font-bold">
