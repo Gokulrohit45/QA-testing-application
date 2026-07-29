@@ -24,47 +24,60 @@ export default function App() {
   const [executions, setExecutions] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null);
 
   // Fetch data from database
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const { data: projData } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-        const { data: testData } = await supabase.from('test_cases').select('*').order('created_at', { ascending: false });
-        const { data: execData } = await supabase.from('executions').select('*').order('date', { ascending: false });
+  async function fetchData() {
+    try {
+      const { data: projData } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+      const { data: testData } = await supabase.from('test_cases').select('*').order('created_at', { ascending: false });
+      const { data: execData } = await supabase.from('executions').select('*').order('date', { ascending: false });
 
-        if (projData) {
-          setProjects(projData);
-          if (projData.length > 0) setSelectedProject(projData[0]);
-        } else {
-          setProjects([]);
-        }
-        if (testData) {
-          setTestCases(testData);
-        } else {
-          setTestCases([]);
-        }
-        if (execData) {
-          setExecutions(execData);
-        } else {
-          setExecutions([]);
-        }
-      } catch (err) {
-        console.error('Error fetching dynamic Supabase records:', err);
-      } finally {
+      if (projData) {
+        setProjects(projData);
+        if (projData.length > 0) setSelectedProject(projData[0]);
+      } else {
+        setProjects([]);
+      }
+      if (testData) {
+        setTestCases(testData);
+      } else {
+        setTestCases([]);
+      }
+      if (execData) {
+        setExecutions(execData);
+      } else {
+        setExecutions([]);
+      }
+    } catch (err) {
+      console.error('Error fetching dynamic Supabase records:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    // Check initial auth session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        fetchData();
+      } else {
         setLoading(false);
       }
-    }
-
-    fetchData();
+    });
 
     // Re-fetch data on Auth state changes (Login / Logout / Token refresh)
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      fetchData();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      setSession(currentSession);
+      if (currentSession) {
+        fetchData();
+      } else {
+        setLoading(false);
+      }
     });
 
     // POLLING: Poll executions every 3 seconds to keep global status list updated
-    // (replaces Supabase Realtime which requires manual table publication setup)
     const execPollInterval = setInterval(async () => {
       try {
         const { data: execData } = await supabase
@@ -74,13 +87,13 @@ export default function App() {
         if (execData) {
           setExecutions(execData);
         }
-      } catch (err) {
-        console.error('Error polling executions:', err);
+      } catch (e) {
+        // silent polling error fallback
       }
     }, 3000);
 
     return () => {
-      authListener?.subscription?.unsubscribe();
+      subscription?.unsubscribe();
       clearInterval(execPollInterval);
     };
   }, []);
@@ -89,12 +102,11 @@ export default function App() {
   useEffect(() => {
     const INACTIVITY_LIMIT_MS = 20 * 60 * 1000; // 20 minutes in milliseconds
     const THROTTLE_MS = 10000; // Only update timestamp at most once every 10 seconds
-    let lastUpdate = 0;
 
     function recordActivity() {
       const now = Date.now();
-      if (now - lastUpdate > THROTTLE_MS) {
-        lastUpdate = now;
+      const lastActiveStr = localStorage.getItem('last_active_timestamp');
+      if (!lastActiveStr || (now - parseInt(lastActiveStr, 10)) > THROTTLE_MS) {
         localStorage.setItem('last_active_timestamp', now.toString());
       }
     }
@@ -107,6 +119,7 @@ export default function App() {
           console.warn('[Session Security] User inactive for 20+ minutes. Signing out...');
           localStorage.removeItem('last_active_timestamp');
           supabase.auth.signOut().then(() => {
+            setSession(null);
             window.location.href = '/login';
           });
         }
@@ -115,7 +128,6 @@ export default function App() {
       }
     }
 
-    // Record initial activity timestamp
     recordActivity();
 
     // Listen for user activity events
@@ -187,35 +199,39 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/register" element={session ? <Navigate to="/" replace /> : <Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
         <Route path="/*" element={
-          <div className="flex h-screen overflow-hidden page-bg">
-            <Sidebar projects={projects} selectedProject={selectedProject} setSelectedProject={setSelectedProject} />
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <Header selectedProject={selectedProject} />
-              <main className="flex-1 overflow-y-auto p-6 scrollbar-thin page-bg">
-                <Routes>
-                  <Route path="/" element={<Dashboard projects={projects} executions={executions} onDeleteProject={handleDeleteProject} />} />
-                  <Route path="/projects/create" element={<CreateProject projects={projects} setProjects={handleAddProject} />} />
-                  <Route path="/projects/:id" element={
-                    <ProjectDetails
-                      projects={projects}
-                      testCases={testCases}
-                      setTestCases={saveTestsState => setTestCases(saveTestsState)}
-                      executions={executions}
-                      setExecutions={saveRunsState => setExecutions(saveRunsState)}
-                      onDeleteProject={handleDeleteProject}
-                    />
-                  } />
-                  <Route path="/profile" element={<UserProfile />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </main>
+          !session ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <div className="flex h-screen overflow-hidden page-bg">
+              <Sidebar projects={projects} selectedProject={selectedProject} setSelectedProject={setSelectedProject} />
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <Header selectedProject={selectedProject} />
+                <main className="flex-1 overflow-y-auto p-6 scrollbar-thin page-bg">
+                  <Routes>
+                    <Route path="/" element={<Dashboard projects={projects} executions={executions} onDeleteProject={handleDeleteProject} />} />
+                    <Route path="/projects/create" element={<CreateProject projects={projects} setProjects={handleAddProject} />} />
+                    <Route path="/projects/:id" element={
+                      <ProjectDetails
+                        projects={projects}
+                        testCases={testCases}
+                        setTestCases={saveTestsState => setTestCases(saveTestsState)}
+                        executions={executions}
+                        setExecutions={saveRunsState => setExecutions(saveRunsState)}
+                        onDeleteProject={handleDeleteProject}
+                      />
+                    } />
+                    <Route path="/profile" element={<UserProfile />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </main>
+              </div>
             </div>
-          </div>
+          )
         } />
       </Routes>
     </Router>
