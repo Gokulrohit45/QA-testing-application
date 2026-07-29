@@ -7,4 +7,5 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 echo "==> Installing Playwright Chromium browser binary..."
+export PLAYWRIGHT_BROWSERS_PATH=0
 playwright install chromium

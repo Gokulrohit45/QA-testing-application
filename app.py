@@ -12,12 +12,20 @@ import google.generativeai as genai
 from playwright.sync_api import sync_playwright
 
 load_dotenv()
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 
 app = Flask(__name__)
 CORS(app)
 
 import shutil
 import subprocess
+
+# Ensure Playwright Chromium browser binary exists on server startup
+try:
+    print("[Playwright Boot Check] Ensuring Chromium binary is installed...")
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
+except Exception as _p_boot_err:
+    print(f"[Playwright Boot Check Warning] {_p_boot_err}")
 try:
     import cv2
 except ImportError:
@@ -618,6 +626,38 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
     active_runs.add(execution_id)
     start_time = time.time()
     safe_print(f"Starting Playwright thread worker for run #{execution_id}")
+
+    # Normalize and parse steps input (JSON string / list / natural language / Supabase fallback)
+    parsed_steps = []
+    if isinstance(steps, str):
+        try:
+            parsed_steps = json.loads(steps)
+        except Exception:
+            parsed_steps = parse_commands_to_json(steps)
+    elif isinstance(steps, list):
+        parsed_steps = steps
+
+    if not parsed_steps and test_case_id and supabase:
+        try:
+            tc_res = supabase.table("test_cases").select("*").eq("id", test_case_id).execute()
+            if tc_res.data and len(tc_res.data) > 0:
+                tc_rec = tc_res.data[0]
+                cached = tc_rec.get("cached_json")
+                if cached:
+                    if isinstance(cached, str):
+                        try:
+                            parsed_steps = json.loads(cached)
+                        except Exception:
+                            parsed_steps = parse_commands_to_json(cached)
+                    elif isinstance(cached, list):
+                        parsed_steps = cached
+                elif tc_rec.get("commands"):
+                    parsed_steps = parse_commands_to_json(tc_rec["commands"])
+        except Exception as err:
+            safe_print(f"[Step Fetch Warning] {err}")
+
+    steps = parsed_steps
+    safe_print(f"[Run Worker #{execution_id}] Normalized steps count: {len(steps)}")
 
     # Generate W3C traceparent header (00-trace_id-span_id-01)
     import secrets
@@ -1386,10 +1426,10 @@ def execute_test():
         try:
             steps = json.loads(steps)
         except Exception:
-            pass
+            steps = parse_commands_to_json(steps)
 
-    if not project_id or not test_id or not steps:
-        return jsonify({"error": "Missing required fields (projectId, testId, steps)"}), 400
+    if not project_id or not test_id:
+        return jsonify({"error": "Missing required fields (projectId, testId)"}), 400
 
     try:
         res = supabase.table("executions").insert({
