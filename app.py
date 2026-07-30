@@ -538,23 +538,41 @@ def smart_fill(page, field: str, value: str):
 
 def smart_click(page, text: str):
     """
-    Universal click handler. Given visible text on any web app, finds and clicks
-    the most appropriate interactive element — button, link, radio option, card, tab, etc.
-    Handles space variations like 'signin' -> 'Sign In'.
+    Universal click handler for modern React / Netlify SPAs.
+    Finds and clicks any interactive element — button, link (<a>), tab, menuitem, etc.
+    Supports case-insensitive matching, extra whitespace, and React hydration delays.
     """
     text = text.strip()
     text_lower = text.lower()
 
-    # Generate text variants (e.g., 'signin' -> 'sign in', 'login' -> 'log in')
-    variants = [text]
-    if "signin" in text_lower:
-        variants.append(text_lower.replace("signin", "Sign In"))
-        variants.append("Sign In")
-        variants.append("sign in")
-    elif "login" in text_lower:
-        variants.append("Log In")
-        variants.append("log in")
+    # Wait 1 sec for React hydration on SPAs
+    page.wait_for_timeout(1000)
 
+    # Generate text variants (e.g. 'signin' -> 'Sign In', 'login' -> 'Log In')
+    variants = [text]
+    if "signin" in text_lower or "sign-in" in text_lower:
+        variants += ["Sign In", "sign in", "Sign-in", "signin"]
+    elif "login" in text_lower or "log-in" in text_lower or "log in" in text_lower:
+        variants += ["Log In", "log in", "Login", "login", "Log-in"]
+
+    # 1. Playwright Role Locators (Exact and Case-Insensitive)
+    for var in variants:
+        try:
+            pattern = re.compile(rf"^\s*{re.escape(var)}\s*$", re.IGNORECASE)
+            # Try link role first
+            link_loc = page.get_by_role("link", name=pattern).first
+            if link_loc.is_visible(timeout=2000):
+                link_loc.click(timeout=3000)
+                return True
+            # Try button role next
+            btn_loc = page.get_by_role("button", name=pattern).first
+            if btn_loc.is_visible(timeout=2000):
+                btn_loc.click(timeout=3000)
+                return True
+        except Exception:
+            pass
+
+    # 2. Priority Selectors Array
     priority_selectors = []
     if any(w in text_lower for w in ["vtab", "logo", "brand"]):
         priority_selectors.extend([
@@ -569,40 +587,34 @@ def smart_click(page, text: str):
 
     for var in variants:
         priority_selectors.extend([
-            # Exact button matches (highest priority)
+            # Links (<a> tags in top headers)
+            f"a:has-text('{var}')",
+            f"a:text-matches('{re.escape(var)}', 'i')",
+            # Buttons
             f"button:has-text('{var}')",
             f"input[type='submit'][value*='{var}' i]",
             f"input[type='button'][value*='{var}' i]",
-            # Links
-            f"a:has-text('{var}')",
-            # Role-based buttons (Material UI, custom components)
+            # Roles
             f"[role='button']:has-text('{var}')",
             f"[role='tab']:has-text('{var}')",
             f"[role='menuitem']:has-text('{var}')",
-            f"[role='radio']:has-text('{var}')",
-            f"[role='option']:has-text('{var}')",
-            # Radio buttons, checkboxes & labels
+            # Labels and inputs
             f"label:has-text('{var}')",
-            f"input[type='radio'][value*='{var}' i]",
-            f"input[type='checkbox'][value*='{var}' i]",
-            # Card / list item click
             f"li:has-text('{var}')",
             f"span:has-text('{var}')",
         ])
 
-    # Only fall back to generic button[type='submit'] if text implies a form submission action
-    submit_words = ["submit", "login", "log in", "log-in", "signin", "sign in", "sign-in", "save", "send", "process", "complete"]
+    submit_words = ["submit", "login", "log in", "log-in", "signin", "sign in", "sign-in", "save", "send"]
     if any(w in text_lower for w in submit_words):
         priority_selectors.append("button[type='submit']")
 
-    # Last resort: any element with exact text
     for var in variants:
         priority_selectors.append(f"*:has-text('{var}')")
 
     for sel in priority_selectors:
         try:
             locator = page.locator(sel).first
-            if locator.is_visible(timeout=1500):
+            if locator.is_visible(timeout=2500):
                 locator.click(timeout=3000)
                 return True
         except Exception:
@@ -1167,13 +1179,24 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
 
                     with open(screenshot_path, "rb") as f:
                         file_data = f.read()
-                        supabase.storage.from_("screenshots").upload(
-                            path=screenshot_path,
-                            file=file_data,
-                            file_options={"content-type": "image/png"}
-                        )
+                        try:
+                            supabase.storage.from_("screenshots").upload(
+                                path=screenshot_path,
+                                file=file_data,
+                                file_options={"content-type": "image/png", "upsert": "true"}
+                            )
+                        except Exception:
+                            try:
+                                supabase.storage.from_("screenshots").update(
+                                    path=screenshot_path,
+                                    file=file_data,
+                                    file_options={"content-type": "image/png"}
+                                )
+                            except Exception:
+                                pass
                         screenshot_url = supabase.storage.from_("screenshots").get_public_url(screenshot_path)
-                    os.remove(screenshot_path)
+                    if os.path.exists(screenshot_path):
+                        os.remove(screenshot_path)
                 except Exception as img_err:
                     print(f"Screenshot upload failed: {str(img_err)}")
 

@@ -2391,14 +2391,31 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                         </div>
                       </div>
                       {!isPassed && !isRunning && step.error_message && (
-                        <div className="mx-2.5 mb-2.5 px-2.5 py-2 bg-red-100/80 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/40">
-                          <p className="text-[9px] font-black text-red-500 uppercase tracking-wider mb-1">⚠ Failure Reason</p>
+                        <div className="mx-2.5 mb-2.5 px-3 py-2.5 bg-red-100/80 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/40 space-y-2">
+                          <p className="text-[9px] font-black text-red-500 uppercase tracking-wider">⚠ Failure Reason</p>
                           <p className="text-[10px] text-red-700 dark:text-red-300 break-all leading-relaxed">{step.error_message}</p>
-                          {step.screenshot_url && (
-                            <button
-                              onClick={() => setScreenshotModal(step.screenshot_url)}
-                              className="mt-1.5 text-[9px] font-semibold text-red-600 dark:text-red-400 underline hover:no-underline"
-                            >View page screenshot at failure →</button>
+                          {step.screenshot_url ? (
+                            <div className="pt-1.5 border-t border-red-200/60 dark:border-red-800/40 space-y-2">
+                              <button
+                                onClick={() => setScreenshotModal(step.screenshot_url)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold shadow transition-all"
+                              >
+                                📷 View Failure Screenshot
+                              </button>
+                              <div 
+                                onClick={() => setScreenshotModal(step.screenshot_url)}
+                                className="rounded-lg overflow-hidden border border-red-300 dark:border-red-800/60 bg-black cursor-pointer max-h-40 group relative"
+                              >
+                                <img src={step.screenshot_url} alt="Failure Screenshot" className="w-full object-cover group-hover:scale-105 transition-all" />
+                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-all">
+                                  Click to Enlarge 🔍
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="pt-1 text-[9px] text-amber-500 font-mono flex items-center gap-1">
+                              <span>📷 Failure screenshot captured</span>
+                            </div>
                           )}
                         </div>
                       )}
