@@ -550,13 +550,13 @@ def smart_click(page, text: str):
     text_lower = text.lower()
 
     # Smart Auto-Pass: If clicking a navigation redirect button (e.g. 'skip to dashboard' or 'continue'),
-    # but the website has ALREADY auto-navigated to the target destination (dashboard/builder), pass cleanly!
+    # but the website path has ALREADY auto-navigated to the target destination (/dashboard or /builder), pass cleanly!
     nav_keywords = ["skip", "continue to dashboard", "go to dashboard", "dashboard"]
     if any(k in text_lower for k in nav_keywords):
         try:
-            current_url = page.url.lower()
-            if any(path in current_url for path in ["dashboard", "builder", "overview", "app"]):
-                print(f"[Smart SPA Auto-Pass] Already on target page ({current_url}), auto-passing click '{text}'")
+            url_path = urllib.parse.urlparse(page.url).path.lower()
+            if any(p in url_path for p in ["dashboard", "builder", "overview"]):
+                print(f"[Smart SPA Auto-Pass] Already on target page path ({url_path}), auto-passing click '{text}'")
                 return True
         except Exception:
             pass
@@ -1235,6 +1235,13 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
                     "screenshot_url": screenshot_url,
                     "duration_ms": duration_ms
                 }).eq("execution_id", execution_id).eq("step_number", step_number).execute()
+
+                # Force memory garbage collection after each step for cloud performance
+                try:
+                    import gc
+                    gc.collect()
+                except Exception:
+                    pass
 
                 if status == "failed":
                     has_failed_steps = True
