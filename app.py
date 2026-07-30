@@ -543,6 +543,10 @@ def smart_click(page, text: str):
     Supports case-insensitive matching, extra whitespace, and React hydration delays.
     """
     text = text.strip()
+    # Strip accidental leading "text " if user writes "click text Font"
+    if text.lower().startswith("text ") and len(text) > 5:
+        text = text[5:].strip()
+
     text_lower = text.lower()
 
     # Wait 1 sec for React hydration on SPAs
