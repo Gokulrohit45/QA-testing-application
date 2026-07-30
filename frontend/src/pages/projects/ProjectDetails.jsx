@@ -432,9 +432,12 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
             };
           });
           setLiveSteps(structuredSteps);
+          return logsData;
         }
+        return null;
       } catch (err) {
         console.error('Failed to poll logs:', err);
+        return null;
       }
     }
 
@@ -442,9 +445,25 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
     fetchLogs();
 
     // If run is active, keep polling every 1.5 seconds
-    if (!isActive) return;
-    const logsInterval = setInterval(fetchLogs, 1500);
-    return () => clearInterval(logsInterval);
+    if (isActive) {
+      const logsInterval = setInterval(fetchLogs, 1500);
+      return () => clearInterval(logsInterval);
+    }
+
+    // Run just completed — keep polling for 45 seconds more to pick up
+    // background screenshot uploads that finish after the run ends.
+    let extraPollCount = 0;
+    const MAX_EXTRA_POLLS = 30; // 30 × 1.5s = 45 seconds after completion
+    const extraInterval = setInterval(async () => {
+      extraPollCount++;
+      const logsData = await fetchLogs();
+      // Stop early if all steps have screenshots or max polls reached
+      const allHaveScreenshots = logsData && logsData.every(l => !!l.screenshot_url);
+      if (allHaveScreenshots || extraPollCount >= MAX_EXTRA_POLLS) {
+        clearInterval(extraInterval);
+      }
+    }, 1500);
+    return () => clearInterval(extraInterval);
   }, [selectedRun?.id, selectedRun?.status]);
 
   // POLLING: Poll execution status every 1s during active run to detect completion
