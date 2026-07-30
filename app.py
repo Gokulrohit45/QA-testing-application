@@ -1180,61 +1180,74 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
                     status = "failed"
                     error_msg = str(step_err)
 
-                # Capture step screenshot and upload to Supabase Storage
+                # Capture screenshot immediately (fast viewport snapshot)
+                screenshot_path = f"screenshot_{execution_id}_{step_number}.png"
+                captured_screenshot_bytes = None
                 try:
-                    screenshot_path = f"screenshot_{execution_id}_{step_number}.png"
-
                     # Auto-scroll active target element or text into view before snapshot
                     try:
                         target_sel = args.get("selector") or args.get("target") or args.get("text")
                         if target_sel and isinstance(target_sel, str) and not target_sel.startswith("http"):
                             if target_sel.startswith("//") or target_sel.startswith("#") or target_sel.startswith("."):
-                                page.locator(target_sel).first.scroll_into_view_if_needed(timeout=1500)
+                                page.locator(target_sel).first.scroll_into_view_if_needed(timeout=1000)
                             else:
-                                page.get_by_text(target_sel, exact=False).first.scroll_into_view_if_needed(timeout=1500)
+                                page.get_by_text(target_sel, exact=False).first.scroll_into_view_if_needed(timeout=1000)
                     except Exception:
                         pass
 
-                    # Capture fast viewport screenshot (200ms) with full-page fallback
+                    # Capture fast viewport screenshot bytes in-memory (no disk write in main thread)
                     try:
-                        page.screenshot(path=screenshot_path, timeout=2000)
+                        captured_screenshot_bytes = page.screenshot(timeout=1500)
                     except Exception:
                         try:
-                            page.screenshot(path=screenshot_path, full_page=True, timeout=3000)
+                            captured_screenshot_bytes = page.screenshot(full_page=False, timeout=2000)
                         except Exception:
-                            pass
-
-                    with open(screenshot_path, "rb") as f:
-                        file_data = f.read()
-                        try:
-                            supabase.storage.from_("screenshots").upload(
-                                path=screenshot_path,
-                                file=file_data,
-                                file_options={"content-type": "image/png", "upsert": "true"}
-                            )
-                        except Exception:
-                            try:
-                                supabase.storage.from_("screenshots").update(
-                                    path=screenshot_path,
-                                    file=file_data,
-                                    file_options={"content-type": "image/png"}
-                                )
-                            except Exception:
-                                pass
-                        screenshot_url = supabase.storage.from_("screenshots").get_public_url(screenshot_path)
-                    if os.path.exists(screenshot_path):
-                        os.remove(screenshot_path)
-                except Exception as img_err:
-                    print(f"Screenshot upload failed: {str(img_err)}")
+                            captured_screenshot_bytes = None
+                except Exception as snap_err:
+                    print(f"Screenshot capture failed: {snap_err}")
 
                 duration_ms = int((time.time() - step_start) * 1000)
 
+                # Save step status immediately WITHOUT waiting for screenshot upload
                 supabase.table("execution_logs").update({
                     "status": status,
                     "error_message": error_msg,
-                    "screenshot_url": screenshot_url,
+                    "screenshot_url": None,
                     "duration_ms": duration_ms
                 }).eq("execution_id", execution_id).eq("step_number", step_number).execute()
+
+                # Upload screenshot in background thread (non-blocking)
+                if captured_screenshot_bytes:
+                    def _upload_screenshot_async(exec_id, step_num, path, img_bytes):
+                        try:
+                            try:
+                                supabase.storage.from_("screenshots").upload(
+                                    path=path,
+                                    file=img_bytes,
+                                    file_options={"content-type": "image/png", "upsert": "true"}
+                                )
+                            except Exception:
+                                try:
+                                    supabase.storage.from_("screenshots").update(
+                                        path=path,
+                                        file=img_bytes,
+                                        file_options={"content-type": "image/png"}
+                                    )
+                                except Exception:
+                                    pass
+                            public_url = supabase.storage.from_("screenshots").get_public_url(path)
+                            supabase.table("execution_logs").update({
+                                "screenshot_url": public_url
+                            }).eq("execution_id", exec_id).eq("step_number", step_num).execute()
+                        except Exception as up_err:
+                            print(f"[Async Screenshot Upload Failed] Step #{step_num}: {up_err}")
+
+                    upload_thread = threading.Thread(
+                        target=_upload_screenshot_async,
+                        args=(execution_id, step_number, screenshot_path, captured_screenshot_bytes),
+                        daemon=True
+                    )
+                    upload_thread.start()
 
                 # Force memory garbage collection after each step for cloud performance
                 try:
@@ -1242,6 +1255,7 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
                     gc.collect()
                 except Exception:
                     pass
+
 
                 if status == "failed":
                     has_failed_steps = True
