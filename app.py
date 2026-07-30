@@ -1959,6 +1959,9 @@ def send_reset_password_email():
 # ─────────────────────────────────────────────────────────────
 #  PROJECT ASSETS MANAGEMENT ENDPOINTS
 # ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+#  PROJECT ASSETS MANAGEMENT ENDPOINTS
+# ─────────────────────────────────────────────────────────────
 @app.route("/api/projects/<int:project_id>/assets", methods=["GET", "POST"])
 def manage_project_assets(project_id):
     if request.method == "GET":
@@ -1971,7 +1974,7 @@ def manage_project_assets(project_id):
             except Exception as e:
                 safe_print(f"[Project Assets DB Fetch Warning] {e}")
 
-        # Local disk fallback listing if DB is empty or uninitialized
+        # Local disk fallback listing if DB is empty or offline
         if not assets_list:
             assets_dir = os.path.abspath(os.path.join(app.root_path, "uploads", "assets", str(project_id)))
             if os.path.exists(assets_dir):
@@ -2013,17 +2016,27 @@ def manage_project_assets(project_id):
             file_size = os.path.getsize(save_path)
             ext = os.path.splitext(filename)[1].lower().replace('.', '')
 
-            asset_data = {
+            # DB payload strictly matching Supabase schema columns
+            db_payload = {
                 "project_id": project_id,
                 "asset_name": asset_name,
                 "original_filename": filename,
                 "file_type": ext.upper() if ext else "FILE",
                 "file_size": file_size,
-                "storage_path": save_path,
-                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                "storage_path": save_path
             }
 
+            asset_record = dict(db_payload)
+
             if supabase:
+                try:
+                    res = supabase.table("project_assets").insert(db_payload).select().execute()
+                    if res.data:
+                        asset_record = res.data[0]
+                except Exception as insert_err:
+                    safe_print(f"[Project Asset DB Insert Warning] {insert_err}")
+
+                # Sync to Supabase Storage bucket for public cloud URL
                 try:
                     with open(save_path, "rb") as af:
                         a_bytes = af.read()
@@ -2043,18 +2056,11 @@ def manage_project_assets(project_id):
                                 )
                             except Exception:
                                 pass
-                        asset_data["file_url"] = supabase.storage.from_("screenshots").get_public_url(supa_path)
+                        asset_record["file_url"] = supabase.storage.from_("screenshots").get_public_url(supa_path)
                 except Exception as supa_asset_err:
                     safe_print(f"[Supabase Asset Upload Warning] {supa_asset_err}")
 
-                try:
-                    res = supabase.table("project_assets").insert(asset_data).select().execute()
-                    if res.data:
-                        asset_data = res.data[0]
-                except Exception as insert_err:
-                    safe_print(f"[Project Asset DB Insert Warning] {insert_err}")
-
-            saved_records.append(asset_data)
+            saved_records.append(asset_record)
 
         return jsonify({"status": "success", "assets": saved_records}), 201
 
@@ -2063,22 +2069,53 @@ def manage_project_assets(project_id):
 def delete_project_asset(asset_id):
     try:
         storage_path = None
+        orig_filename = None
+        project_id = None
+
         if supabase:
             try:
                 res = supabase.table("project_assets").select("*").eq("id", asset_id).execute()
                 if res.data:
-                    storage_path = res.data[0].get("storage_path")
+                    rec = res.data[0]
+                    storage_path = rec.get("storage_path")
+                    orig_filename = rec.get("original_filename")
+                    project_id = rec.get("project_id")
+
+                    # Delete from Supabase Storage bucket
+                    if orig_filename and project_id:
+                        try:
+                            supabase.storage.from_("screenshots").remove([f"assets/{project_id}/{orig_filename}"])
+                        except Exception:
+                            pass
+
+                    # Delete from Supabase Database
                     supabase.table("project_assets").delete().eq("id", asset_id).execute()
             except Exception as db_err:
                 safe_print(f"[Asset Delete DB Warning] {db_err}")
 
+        # Delete from local disk
         if storage_path and os.path.exists(storage_path):
             try:
                 os.remove(storage_path)
             except Exception:
                 pass
 
+        # Also search uploads/assets for any physical files matching orig_filename to purge from disk
+        if orig_filename:
+            assets_base = os.path.abspath(os.path.join(app.root_path, "uploads", "assets"))
+            if os.path.exists(assets_base):
+                clean_target = orig_filename.lower().strip()
+                for root_dir, dirs, files in os.walk(assets_base):
+                    for fname in files:
+                        if fname.lower().strip() == clean_target:
+                            try:
+                                os.remove(os.path.join(root_dir, fname))
+                            except Exception:
+                                pass
+
         return jsonify({"status": "success", "message": f"Asset #{asset_id} deleted"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -2147,32 +2184,60 @@ def replace_project_asset(asset_id):
 @app.route("/api/assets/<int:asset_id>/file", methods=["GET"])
 def get_project_asset_file(asset_id):
     storage_path = None
-    original_filename = "asset_file"
+    original_filename = None
+    file_url = None
+    project_id = "default"
 
     if supabase:
         try:
             res = supabase.table("project_assets").select("*").eq("id", asset_id).execute()
             if res.data:
-                storage_path = res.data[0].get("storage_path")
-                original_filename = res.data[0].get("original_filename", original_filename)
-        except Exception:
-            pass
+                rec = res.data[0]
+                storage_path = rec.get("storage_path")
+                original_filename = rec.get("original_filename")
+                file_url = rec.get("file_url")
+                project_id = rec.get("project_id", project_id)
+                if file_url:
+                    return redirect(file_url)
+        except Exception as err:
+            safe_print(f"[Asset File Fetch DB Warning] {err}")
 
-    if not storage_path or not os.path.exists(storage_path):
+    if storage_path and os.path.exists(storage_path):
+        directory = os.path.dirname(storage_path)
+        filename = os.path.basename(storage_path)
+        return send_from_directory(directory, filename)
+
+    # Search local disk for matching original_filename
+    if original_filename:
         assets_base = os.path.abspath(os.path.join(app.root_path, "uploads", "assets"))
         if os.path.exists(assets_base):
+            clean_target = original_filename.lower().strip()
+            clean_target_no_ext = os.path.splitext(clean_target)[0]
             for root, dirs, files in os.walk(assets_base):
                 for f in files:
-                    storage_path = os.path.join(root, f)
-                    original_filename = f
-                    break
+                    f_lower = f.lower().strip()
+                    f_no_ext = os.path.splitext(f_lower)[0]
+                    if clean_target in [f_lower, f_no_ext] or clean_target_no_ext in [f_lower, f_no_ext]:
+                        return send_from_directory(root, f)
 
-    if not storage_path or not os.path.exists(storage_path):
-        return jsonify({"error": "Asset file not found on disk"}), 404
+    # Cloud Auto-Downloader: If missing on local disk, fetch from Supabase Storage
+    if original_filename and supabase:
+        supa_public_url = f"https://rehuyaappyykhktlowuv.supabase.co/storage/v1/object/public/screenshots/assets/{project_id}/{original_filename}"
+        try:
+            import requests
+            safe_print(f"[Asset File Fetch] Downloading from Supabase Storage: {supa_public_url}")
+            resp = requests.get(supa_public_url, timeout=10)
+            if resp.status_code == 200 and len(resp.content) > 100:
+                target_dir = os.path.abspath(os.path.join(app.root_path, "uploads", "assets", str(project_id)))
+                os.makedirs(target_dir, exist_ok=True)
+                local_dest = os.path.join(target_dir, original_filename)
+                with open(local_dest, "wb") as f:
+                    f.write(resp.content)
+                return send_from_directory(target_dir, original_filename)
+        except Exception as dl_err:
+            safe_print(f"[Asset File Fetch Warning] {dl_err}")
 
-    directory = os.path.dirname(storage_path)
-    filename = os.path.basename(storage_path)
-    return send_from_directory(directory, filename)
+    return jsonify({"error": f"Asset file #{asset_id} not found"}), 404
 
 
 if __name__ == "__main__":

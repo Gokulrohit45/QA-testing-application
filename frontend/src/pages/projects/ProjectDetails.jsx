@@ -1335,15 +1335,19 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                   <button onClick={() => setPreviewAssetModal(null)} className="btn-ghost text-xs px-3 py-1.5">Close</button>
                 </div>
                 <div className="flex-1 overflow-auto flex items-center justify-center min-h-[350px] bg-slate-950 rounded-xl p-4 border border-slate-800">
-                  {['JPG', 'JPEG', 'PNG', 'WEBP', 'GIF', 'SVG'].includes(previewAssetModal.file_type) ? (
+                  {['JPG', 'JPEG', 'PNG', 'WEBP', 'GIF', 'SVG'].includes((previewAssetModal.file_type || '').toUpperCase()) || (previewAssetModal.original_filename || '').match(/\.(jpg|jpeg|png|webp|gif|svg)$/i) ? (
                     <img 
-                      src={`${BACKEND_URL}/api/assets/${previewAssetModal.id}/file`} 
+                      src={previewAssetModal.file_url || `${BACKEND_URL}/api/assets/${previewAssetModal.id}/file`} 
                       alt={previewAssetModal.asset_name}
                       className="max-h-[60vh] max-w-full object-contain rounded-lg shadow-xl"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = `${BACKEND_URL}/api/assets/${previewAssetModal.id}/file`;
+                      }}
                     />
                   ) : previewAssetModal.file_type === 'PDF' ? (
                     <iframe 
-                      src={`${BACKEND_URL}/api/assets/${previewAssetModal.id}/file`} 
+                      src={previewAssetModal.file_url || `${BACKEND_URL}/api/assets/${previewAssetModal.id}/file`} 
                       title={previewAssetModal.asset_name}
                       className="w-full h-[65vh] rounded-lg border border-slate-800"
                     />
@@ -1352,7 +1356,7 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                       <Paperclip size={48} className="mx-auto text-indigo-400"/>
                       <p className="font-bold text-sm text-primary">Preview not supported directly in browser modal for .{previewAssetModal.file_type}</p>
                       <a 
-                        href={`${BACKEND_URL}/api/assets/${previewAssetModal.id}/file`}
+                        href={previewAssetModal.file_url || `${BACKEND_URL}/api/assets/${previewAssetModal.id}/file`}
                         download={previewAssetModal.original_filename}
                         className="btn-primary text-xs px-4 py-2 inline-flex items-center gap-2"
                       >
