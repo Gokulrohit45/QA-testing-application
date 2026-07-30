@@ -348,8 +348,24 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
   const passed    = projRuns.filter(e => e.status === 'Passed' || e.status === 'Passed with Warnings').length;
   const rate      = totalRuns > 0 ? Math.round((passed / totalRuns) * 100) : 0;
 
+  const [parseSeconds, setParseSeconds] = useState(0);
+
+  useEffect(() => {
+    let interval = null;
+    if (uploadLoading || editModalAnalyzing) {
+      setParseSeconds(0);
+      interval = setInterval(() => {
+        setParseSeconds(prev => +(prev + 0.1).toFixed(1));
+      }, 100);
+    } else {
+      setParseSeconds(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [uploadLoading, editModalAnalyzing]);
+
   useEffect(() => { if (projTests.length > 0 && !runTestId) setRunTestId(projTests[0].id.toString()); }, [projTests.length]);
-  useEffect(() => { logEndRef.current?.scrollIntoView({ behavior:'smooth' }); }, [liveLogs]);
 
   // POLLING: Load logs from DB every 1.5s during active run, or once when viewing a finished run
   useEffect(() => {
@@ -1418,11 +1434,11 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
               </div>
               <div className="flex items-center justify-between pt-1">
                 <div className="text-xs flex items-center gap-2 text-secondary">
-                  {uploadLoading && <><Sparkles className="animate-spin text-indigo-500" size={14}/> Processing with Gemini AI...</>}
+                  {uploadLoading && <><Sparkles className="animate-spin text-indigo-500" size={14}/> Processing with Gemini AI... <span className="font-mono text-indigo-400 font-bold">({parseSeconds.toFixed(1)}s)</span></>}
                   {uploadSuccess && <><CheckCircle2 className="text-emerald-500" size={14}/> <span className="text-emerald-600 dark:text-emerald-400">Saved!</span></>}
                 </div>
-                <button type="submit" disabled={uploadLoading||uploadSuccess} className="btn-primary disabled:opacity-50">
-                  {uploadLoading ? 'Parsing...' : 'Save Test Case'}
+                <button type="submit" disabled={uploadLoading||uploadSuccess} className="btn-primary disabled:opacity-50 font-mono">
+                  {uploadLoading ? `Parsing (${parseSeconds.toFixed(1)}s)...` : 'Save Test Case'}
                 </button>
               </div>
             </form>

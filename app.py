@@ -1020,31 +1020,77 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
 
                         safe_print(f"[Upload Step] Field: '{field_label}' | Asset Target: '{asset_name}' | Project ID: {project_id}")
 
-                        # 1. Resolve Asset Storage Path
+                        # 1. Resolve Asset Storage Path (Fuzzy Match + Global Disk Search + Cloud Auto-Downloader)
                         resolved_file_path = None
-                        if supabase and project_id:
+                        matched_asset_rec = None
+                        project_assets_dir = os.path.abspath(os.path.join(app.root_path, "uploads", "assets", str(project_id)))
+                        os.makedirs(project_assets_dir, exist_ok=True)
+
+                        if supabase:
                             try:
-                                res = supabase.table("project_assets").select("*").eq("project_id", project_id).execute()
+                                res = supabase.table("project_assets").select("*").execute()
                                 if res.data:
+                                    clean_target = asset_name.lower().strip()
+                                    clean_target_no_ext = os.path.splitext(clean_target)[0]
+
                                     for a in res.data:
-                                        if (a.get("asset_name") or "").lower() == asset_name.lower() or \
-                                           (a.get("original_filename") or "").lower() == asset_name.lower():
+                                        aname = (a.get("asset_name") or "").lower().strip()
+                                        aname_no_ext = os.path.splitext(aname)[0]
+                                        orig_name = (a.get("original_filename") or "").lower().strip()
+                                        orig_no_ext = os.path.splitext(orig_name)[0]
+
+                                        if clean_target in [aname, aname_no_ext, orig_name, orig_no_ext] or \
+                                           clean_target_no_ext in [aname, aname_no_ext, orig_no_ext] or \
+                                           aname_no_ext in clean_target_no_ext or clean_target_no_ext in aname_no_ext:
+                                            matched_asset_rec = a
                                             if a.get("storage_path") and os.path.exists(a["storage_path"]):
                                                 resolved_file_path = a["storage_path"]
                                             break
                             except Exception as db_err:
                                 safe_print(f"[Project Asset DB Query Warning] {db_err}")
 
+                        # 2. Search local project asset dir and all uploads/assets subdirectories
                         if not resolved_file_path:
-                            project_assets_dir = os.path.abspath(os.path.join(app.root_path, "uploads", "assets", str(project_id)))
-                            possible_path = os.path.join(project_assets_dir, asset_name)
-                            if os.path.exists(possible_path):
-                                resolved_file_path = possible_path
-                            elif os.path.exists(project_assets_dir):
-                                for fname in os.listdir(project_assets_dir):
-                                    if fname.lower() == asset_name.lower():
-                                        resolved_file_path = os.path.join(project_assets_dir, fname)
+                            all_assets_dir = os.path.abspath(os.path.join(app.root_path, "uploads", "assets"))
+                            if os.path.exists(all_assets_dir):
+                                clean_target = asset_name.lower().strip()
+                                clean_target_no_ext = os.path.splitext(clean_target)[0]
+                                for root_dir, dirs, files in os.walk(all_assets_dir):
+                                    for fname in files:
+                                        f_lower = fname.lower().strip()
+                                        f_no_ext = os.path.splitext(f_lower)[0]
+                                        if clean_target in [f_lower, f_no_ext] or clean_target_no_ext in [f_lower, f_no_ext]:
+                                            resolved_file_path = os.path.join(root_dir, fname)
+                                            break
+                                    if resolved_file_path:
                                         break
+
+                        # Cloud Downloader Fallback: If missing on local disk, download from Supabase Storage or server
+                        if not resolved_file_path or not os.path.exists(resolved_file_path):
+                            if matched_asset_rec:
+                                orig_fname = matched_asset_rec.get("original_filename") or f"{asset_name}.jpg"
+                                dl_target = os.path.join(project_assets_dir, orig_fname)
+
+                                try_urls = []
+                                if matched_asset_rec.get("file_url"):
+                                    try_urls.append(matched_asset_rec["file_url"])
+                                if matched_asset_rec.get("storage_url"):
+                                    try_urls.append(matched_asset_rec["storage_url"])
+                                try_urls.append(f"https://rehuyaappyykhktlowuv.supabase.co/storage/v1/object/public/screenshots/{project_id}/{orig_fname}")
+
+                                for url in try_urls:
+                                    try:
+                                        import requests
+                                        safe_print(f"[Project Asset Cloud Sync] Downloading asset from {url}...")
+                                        resp = requests.get(url, timeout=10)
+                                        if resp.status_code == 200 and len(resp.content) > 100:
+                                            with open(dl_target, "wb") as f:
+                                                f.write(resp.content)
+                                            resolved_file_path = dl_target
+                                            safe_print(f"[Project Asset Cloud Sync SUCCESS] Saved to: {dl_target}")
+                                            break
+                                    except Exception as dl_err:
+                                        safe_print(f"[Project Asset Cloud Sync Warning] {dl_err}")
 
                         if not resolved_file_path or not os.path.exists(resolved_file_path):
                             raise Exception(f"Asset '{asset_name}' not found in Project Assets for project #{project_id}.")
@@ -1978,6 +2024,29 @@ def manage_project_assets(project_id):
             }
 
             if supabase:
+                try:
+                    with open(save_path, "rb") as af:
+                        a_bytes = af.read()
+                        supa_path = f"assets/{project_id}/{filename}"
+                        try:
+                            supabase.storage.from_("screenshots").upload(
+                                path=supa_path,
+                                file=a_bytes,
+                                file_options={"content-type": "application/octet-stream", "upsert": "true"}
+                            )
+                        except Exception:
+                            try:
+                                supabase.storage.from_("screenshots").update(
+                                    path=supa_path,
+                                    file=a_bytes,
+                                    file_options={"content-type": "application/octet-stream"}
+                                )
+                            except Exception:
+                                pass
+                        asset_data["file_url"] = supabase.storage.from_("screenshots").get_public_url(supa_path)
+                except Exception as supa_asset_err:
+                    safe_print(f"[Supabase Asset Upload Warning] {supa_asset_err}")
+
                 try:
                     res = supabase.table("project_assets").insert(asset_data).select().execute()
                     if res.data:
