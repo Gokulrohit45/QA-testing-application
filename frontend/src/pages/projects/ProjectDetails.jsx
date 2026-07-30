@@ -2372,7 +2372,7 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {step.duration_ms > 0 && <span className="text-[9px] text-muted">{step.duration_ms}ms</span>}
-                          {step.screenshot_url && (
+                          {step.screenshot_url ? (
                             <button
                               onClick={() => setScreenshotModal(step.screenshot_url)}
                               title="View screenshot"
@@ -2382,6 +2382,8 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                                   : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-800'
                               }`}
                             >📷 Screenshot</button>
+                          ) : isPassed && (
+                            <span className="text-[9px] font-mono text-slate-400 opacity-70 animate-pulse">📷 Syncing...</span>
                           )}
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                             isPassed ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' :

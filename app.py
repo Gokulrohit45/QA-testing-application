@@ -1175,11 +1175,14 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
                     except Exception:
                         pass
 
-                    # Capture full-page screenshot with fallback
+                    # Capture fast viewport screenshot (200ms) with full-page fallback
                     try:
-                        page.screenshot(path=screenshot_path, full_page=True, timeout=4000)
+                        page.screenshot(path=screenshot_path, timeout=2000)
                     except Exception:
-                        page.screenshot(path=screenshot_path, timeout=4000)
+                        try:
+                            page.screenshot(path=screenshot_path, full_page=True, timeout=3000)
+                        except Exception:
+                            pass
 
                     with open(screenshot_path, "rb") as f:
                         file_data = f.read()
