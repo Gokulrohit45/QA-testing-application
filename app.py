@@ -1299,24 +1299,25 @@ STRICT FORMATTING REQUIREMENTS:
 
 ===FRONTEND_FINDING===
 🔴 FRONTEND FINDING (Playwright):
-• UI Status: {failed_step}
-• Error Detail: <short summary of UI status without raw HTML page dumps>
-• Intercepted API Statuses: <list API status codes like 500, 504, 401, or None>
+1. UI Status: {failed_step}
+2. Error Detail: <short summary of UI status without raw HTML page dumps>
+3. Intercepted API Statuses: <list API status codes like 500, 504, 401, or None>
 
 ===FRONTEND_RECOMMENDATION===
 💡 FRONTEND RECOMMENDED FIX:
-1. <Actionable UI step 1>
-2. <Actionable UI step 2>
+1. <Actionable UI step 1 for item 1>
+2. <Actionable UI step 2 for item 2>
+3. <Actionable UI step 3 for item 3>
 
 ===BACKEND_FINDING===
 ⚙️ BACKEND FINDING (OpenTelemetry Spans):
-• Microservices & Spans: <list microservices or Server Cold-Start Boot Delay state>
-• DB Queries & Errors: <list SQL statements, latency timings, Code Exceptions, or Cold Container Spin-up notes>
+1. Microservices & Spans: <list microservices or Server Cold-Start Boot Delay state>
+2. DB Queries & Errors: <list SQL statements, latency timings, Code Exceptions, or Cold Container Spin-up notes>
 
 ===BACKEND_RECOMMENDATION===
 🛠️ BACKEND RECOMMENDED FIX:
-1. <Actionable Backend step 1>
-2. <Actionable Backend step 2>
+1. <Actionable Backend step 1 for item 1>
+2. <Actionable Backend step 2 for item 2>
 """
     try:
         if gemini_key:
@@ -1328,15 +1329,15 @@ STRICT FORMATTING REQUIREMENTS:
     
     # Fallback explanation when Gemini API rate limit occurs
     has_otel = len(spans) > 0
-    net_bullets = "\n".join([f"• Endpoint: {e.get('url','')} -> HTTP {e.get('status','')}" for e in net_errs[:3]]) if net_errs else "• None (Server held connection open during container boot)"
-    otel_bullets = "\n".join(['• ' + str(s.get('service_name','')) + ' -> ' + str(s.get('name','')) + ' (' + str(s.get('duration_ms','')) + 'ms): ' + str(s.get('attributes','')) for s in spans[:4]]) if has_otel else '• Telemetry: Cold-Start container spin-up delay detected at API boundary.'
+    net_bullets = "\n".join([f"{i+1}. Endpoint: {e.get('url','')} -> HTTP {e.get('status','')}" for i, e in enumerate(net_errs[:3])]) if net_errs else "1. None (Server held connection open during container boot)"
+    otel_bullets = "\n".join([f"{i+1}. {s.get('service_name','')} -> {s.get('name','')} ({s.get('duration_ms','')}ms): {s.get('attributes','')}" for i, s in enumerate(spans[:4])]) if has_otel else '1. Telemetry: Cold-Start container spin-up delay detected at API boundary.'
 
     if is_cold_start:
         return f"""===FRONTEND_FINDING===
 🔴 FRONTEND FINDING (Playwright):
-• Failing Step: {failed_step}
-• Error Detail: {clean_error} (Target cloud server was in a sleeping state and required container boot time).
-• Intercepted API Statuses: None (Server held connection open while spinning up).
+1. Failing Step: {failed_step}
+2. Error Detail: {clean_error} (Target cloud server was in a sleeping state and required container boot time).
+3. Intercepted API Statuses: None (Server held connection open while spinning up).
 
 ===FRONTEND_RECOMMENDATION===
 💡 FRONTEND RECOMMENDED FIX:
@@ -1345,8 +1346,8 @@ STRICT FORMATTING REQUIREMENTS:
 
 ===BACKEND_FINDING===
 ⚙️ BACKEND FINDING (OpenTelemetry Spans):
-• Server State: Sleeping Container / Cold-Start Boot Delay detected on cloud host.
-• Impact: Verification step timed out before backend finished container initialization.
+1. Server State: Sleeping Container / Cold-Start Boot Delay detected on cloud host.
+2. Impact: Verification step timed out before backend finished container initialization.
 
 ===BACKEND_RECOMMENDATION===
 🛠️ BACKEND RECOMMENDED FIX:
@@ -1357,8 +1358,8 @@ STRICT FORMATTING REQUIREMENTS:
 
     return f"""===FRONTEND_FINDING===
 {prefix}🔴 FRONTEND FINDING (Playwright):
-• UI Status: {failed_step}
-• Error Detail: {clean_error}
+1. UI Status: {failed_step}
+2. Error Detail: {clean_error}
 
 ===FRONTEND_RECOMMENDATION===
 💡 FRONTEND RECOMMENDED FIX:
@@ -1367,10 +1368,9 @@ STRICT FORMATTING REQUIREMENTS:
 
 ===BACKEND_FINDING===
 ⚙️ BACKEND FINDING (OpenTelemetry Spans):
-📡 Intercepted API Failures:
+1. Intercepted API Failures:
 {net_bullets}
-
-⚙️ OpenTelemetry Traces:
+2. OpenTelemetry Traces:
 {otel_bullets}
 
 ===BACKEND_RECOMMENDATION===

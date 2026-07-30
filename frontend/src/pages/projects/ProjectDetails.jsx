@@ -349,6 +349,20 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
   const rate      = totalRuns > 0 ? Math.round((passed / totalRuns) * 100) : 0;
 
   const [parseSeconds, setParseSeconds] = useState(0);
+  const [liveTimerSec, setLiveTimerSec] = useState(0);
+
+  useEffect(() => {
+    let interval = null;
+    if (liveRunning) {
+      setLiveTimerSec(0);
+      interval = setInterval(() => {
+        setLiveTimerSec(prev => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [liveRunning]);
 
   useEffect(() => {
     let interval = null;
@@ -1742,6 +1756,35 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
       {/* ── RESULTS ── */}
       {activeTab==='results' && selectedRun && (
         <div className="space-y-6 w-full">
+          {/* Top Metrics Container: Total / Passed / Failed / Pass Rate */}
+          {(() => {
+            const resPassed = liveSteps.filter(s => s.status === 'passed' || s.status === 'Passed').length;
+            const resFailed = liveSteps.filter(s => s.status === 'failed' || s.status === 'Failed').length;
+            const resTotal = liveSteps.length || 1;
+            const resPassRate = Math.round((resPassed / resTotal) * 100);
+
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="card p-4 bg-slate-900 border border-slate-800 text-white">
+                  <p className="text-[10px] text-slate-400 font-sans uppercase font-medium">Total Test Cases / Steps</p>
+                  <p className="font-mono font-black text-base text-indigo-400 mt-1">{resTotal} Steps</p>
+                </div>
+                <div className="card p-4 bg-emerald-950/20 border border-emerald-900/40 text-emerald-400">
+                  <p className="text-[10px] text-emerald-400 font-sans uppercase font-medium">✓ Passed Steps</p>
+                  <p className="font-mono font-black text-base text-emerald-400 mt-1">{resPassed} Passed</p>
+                </div>
+                <div className="card p-4 bg-red-950/20 border border-red-900/40 text-red-400">
+                  <p className="text-[10px] text-red-400 font-sans uppercase font-medium">✗ Failed Steps</p>
+                  <p className="font-mono font-black text-base text-red-400 mt-1">{resFailed} Failed</p>
+                </div>
+                <div className="card p-4 bg-purple-950/20 border border-purple-900/40 text-purple-400">
+                  <p className="text-[10px] text-purple-400 font-sans uppercase font-medium">Pass Success Rate</p>
+                  <p className="font-mono font-black text-base text-purple-400 mt-1">{resPassRate}% Rate</p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Top Row: Full-Width Run Summary & Authentication Bar */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="card p-5 space-y-3">
@@ -1824,11 +1867,11 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                           <button
                             onClick={() => setScreenshotModal(step.screenshot_url)}
                             title="View screenshot"
-                            className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-slate-400 border border-base hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all"
-                          >📷</button>
+                            className="text-[9px] font-semibold text-indigo-600 dark:text-indigo-400 underline hover:no-underline"
+                          >📷 Screenshot</button>
                         )}
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPassed ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                          {isPassed ? 'PASSED' : 'FAILED'}
+                        <span className={`badge ${isPassed ? 'badge-success' : 'badge-error'}`}>
+                          {(step.status || 'PENDING').toUpperCase()}
                         </span>
                       </div>
                     </div>
@@ -1895,10 +1938,10 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                 )}
               </div>
 
-              {/* OpenTelemetry Backend Spans Waterfall */}
+              {/* OpenTelemetry Distributed Trace Spans */}
               <div className="card p-4 space-y-2">
                 <h4 className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
-                  <span>Backend OpenTelemetry Spans</span>
+                  <span>OpenTelemetry Trace Spans</span>
                   <span className="badge badge-indigo text-[10px]">{telemetryData?.spans?.length || 0}</span>
                 </h4>
                 {telemetryData?.spans?.length > 0 ? (
@@ -1940,8 +1983,24 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
               if (!feFinding && !beFinding && rawReport) {
                 const splitBackend = rawReport.split(/(?=⚙️ BACKEND|BACKEND FINDING)/);
                 feFinding = splitBackend[0] ? splitBackend[0].trim() : rawReport;
-                beFinding = splitBackend[1] ? splitBackend[1].trim() : "⚙️ BACKEND FINDING (OpenTelemetry Spans):\n• All microservices and API endpoints executed cleanly.";
+                beFinding = splitBackend[1] ? splitBackend[1].trim() : "⚙️ BACKEND FINDING (OpenTelemetry Spans):\n1. All microservices and API endpoints executed cleanly.";
               }
+
+              const formatAsNumberedList = (text) => {
+                if (!text) return "";
+                let itemIndex = 1;
+                return text.split('\n').map(line => {
+                  if (line.trim().startsWith('•')) {
+                    const formatted = line.replace('•', `${itemIndex}.`);
+                    itemIndex++;
+                    return formatted;
+                  }
+                  return line;
+                }).join('\n');
+              };
+
+              const formattedFeFinding = formatAsNumberedList(feFinding);
+              const formattedBeFinding = formatAsNumberedList(beFinding);
 
               return (
                 <>
@@ -1957,9 +2016,9 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                     <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
                       <div>
                         <pre className="font-sans text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">
-                          {feFinding || (selectedRun?.status?.includes('Passed')
-                            ? "🔴 FRONTEND FINDING (Playwright):\n• All test steps completed successfully with zero page assertion failures."
-                            : "🔴 FRONTEND FINDING (Playwright):\n• UI step warnings detected during execution.")}
+                          {formattedFeFinding || (selectedRun?.status?.includes('Passed')
+                            ? "🔴 FRONTEND FINDING (Playwright):\n1. All test steps completed successfully with zero page assertion failures."
+                            : "🔴 FRONTEND FINDING (Playwright):\n1. UI step warnings detected during execution.")}
                         </pre>
                       </div>
                       <div className="pt-2.5 border-t border-slate-800">
@@ -1989,9 +2048,9 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                     <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
                       <div>
                         <pre className="font-sans text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">
-                          {beFinding || (selectedRun?.status?.includes('Passed')
-                            ? "⚙️ BACKEND FINDING (OpenTelemetry Spans):\n• Microservices and API endpoints returned 200 OK status code."
-                            : "⚙️ BACKEND FINDING (OpenTelemetry Spans):\n• OpenTelemetry trace spans recorded.")}
+                          {formattedBeFinding || (selectedRun?.status?.includes('Passed')
+                            ? "⚙️ BACKEND FINDING (OpenTelemetry Spans):\n1. Microservices and API endpoints returned 200 OK status code."
+                            : "⚙️ BACKEND FINDING (OpenTelemetry Spans):\n1. OpenTelemetry trace spans recorded.")}
                         </pre>
                       </div>
                       <div className="pt-2.5 border-t border-slate-800">
@@ -2045,21 +2104,64 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                   <div className="w-7 h-7 rounded-lg gradient-brand flex items-center justify-center text-white font-black text-xs">Q</div>
                   <span className="font-black text-slate-900 text-sm">QA·AI Platform</span>
                 </div>
-                <h1 className="text-xl font-black text-slate-900 tracking-tight">Execution Report</h1>
-                <p className="text-xs text-slate-500 mt-1">Auto-generated by Playwright automation runner</p>
+                <h1 className="text-xl font-bold text-slate-900">Automation Test Execution Report</h1>
+                <p className="text-xs text-slate-400 font-mono mt-1">Generated {new Date().toLocaleString()}</p>
               </div>
               <div className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${selectedRun.status==='Passed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                 {selectedRun.status==='Passed' ? '✓ All Tests Passed' : '✗ Tests Failed'}
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-4 p-5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-              {[{label:'Project',value:project.name},{label:'Run ID',value:`#${selectedRun.id}`},{label:'Date',value:new Date(selectedRun.date).toLocaleDateString()},{label:'Duration',value:`${selectedRun.duration}s`}].map(m => (
-                <div key={m.label}>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{m.label}</p>
-                  <p className="font-bold text-slate-800 mt-0.5 truncate">{m.value}</p>
+
+            {/* Passed / Failed / Total Metrics Summary Card inside PDF Report */}
+            {(() => {
+              const rPassed = liveSteps.filter(s => s.status === 'passed' || s.status === 'Passed').length;
+              const rFailed = liveSteps.filter(s => s.status === 'failed' || s.status === 'Failed').length;
+              const rTotal = liveSteps.length || 1;
+              const rPassRate = Math.round((rPassed / rTotal) * 100);
+
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Project Name</p>
+                      <p className="font-bold text-slate-800 mt-0.5 truncate">{project.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Execution Run</p>
+                      <p className="font-mono font-bold text-indigo-600 mt-0.5">#{selectedRun.id}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Execution Date</p>
+                      <p className="font-bold text-slate-700 mt-0.5">{new Date(selectedRun.date).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Duration</p>
+                      <p className="font-mono font-bold text-slate-800 mt-0.5">{selectedRun.duration}s</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-3 p-4 bg-slate-900 text-white rounded-xl border border-slate-800 text-xs font-mono">
+                    <div className="p-3 bg-slate-950/80 rounded-lg border border-slate-800">
+                      <p className="text-[10px] text-slate-400 uppercase font-sans font-medium">Total Test Steps</p>
+                      <p className="text-sm font-black text-indigo-400 mt-0.5">{rTotal} Steps</p>
+                    </div>
+                    <div className="p-3 bg-slate-950/80 rounded-lg border border-slate-800">
+                      <p className="text-[10px] text-emerald-400 uppercase font-sans font-medium">✓ Passed Steps</p>
+                      <p className="text-sm font-black text-emerald-400 mt-0.5">{rPassed} Passed</p>
+                    </div>
+                    <div className="p-3 bg-slate-950/80 rounded-lg border border-slate-800">
+                      <p className="text-[10px] text-red-400 uppercase font-sans font-medium">✗ Failed Steps</p>
+                      <p className="text-sm font-black text-red-400 mt-0.5">{rFailed} Failed</p>
+                    </div>
+                    <div className="p-3 bg-slate-950/80 rounded-lg border border-slate-800">
+                      <p className="text-[10px] text-purple-400 uppercase font-sans font-medium">Pass Success Rate</p>
+                      <p className="text-sm font-black text-purple-400 mt-0.5">{rPassRate}% Rate</p>
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
+            
             <div>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Execution Log</p>
               <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
@@ -2194,30 +2296,40 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
               }
 
               const totalSteps = calculatedTotal || (liveSteps.length > 0 ? liveSteps.length : 1);
-              const completedSteps = liveSteps.filter(s => s.status === 'passed' || s.status === 'Passed' || s.status === 'failed' || s.status === 'Failed').length;
+              const passedSteps = liveSteps.filter(s => s.status === 'passed' || s.status === 'Passed').length;
+              const failedSteps = liveSteps.filter(s => s.status === 'failed' || s.status === 'Failed').length;
+              const completedSteps = passedSteps + failedSteps;
               const remainingSteps = Math.max(0, totalSteps - completedSteps);
               const completionPercent = Math.min(100, Math.round((completedSteps / totalSteps) * 100));
               const estimatedTotalSec = selectedRun?.duration || Math.round(totalSteps * 4.3);
 
               return (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-slate-800 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-3 border-t border-slate-800 text-xs">
                     <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
-                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Completed Steps</p>
-                      <p className="font-mono font-black text-sm text-emerald-400 mt-0.5">
-                        {completedSteps} / {totalSteps}
-                      </p>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
-                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Remaining Steps</p>
-                      <p className="font-mono font-black text-sm text-amber-400 mt-0.5">
-                        {remainingSteps} / {totalSteps}
-                      </p>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
-                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Avg Total Execution Time</p>
+                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Total Test Steps</p>
                       <p className="font-mono font-black text-sm text-indigo-400 mt-0.5">
-                        ~{estimatedTotalSec}s (~{(estimatedTotalSec / 60).toFixed(1)} mins process duration)
+                        {totalSteps} Steps
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-slate-950/70 border border-emerald-900/40 bg-emerald-950/20">
+                      <p className="text-[10px] text-emerald-400 font-medium uppercase tracking-wider">✓ Passed Steps</p>
+                      <p className="font-mono font-black text-sm text-emerald-400 mt-0.5">
+                        {passedSteps} Passed
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-slate-950/70 border border-red-900/40 bg-red-950/20">
+                      <p className="text-[10px] text-red-400 font-medium uppercase tracking-wider">✗ Failed Steps</p>
+                      <p className="font-mono font-black text-sm text-red-400 mt-0.5">
+                        {failedSteps} Failed
+                      </p>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                        {liveRunning ? "⏱️ Real-Time Execution Clock" : "Total Process Time"}
+                      </p>
+                      <p className="font-mono font-black text-sm text-amber-400 mt-0.5">
+                        {liveRunning ? `${liveTimerSec}s Live (Avg ~${estimatedTotalSec}s)` : `${selectedRun?.duration || estimatedTotalSec}s Process Duration`}
                       </p>
                     </div>
                   </div>
