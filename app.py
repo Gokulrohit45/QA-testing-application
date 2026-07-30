@@ -1959,9 +1959,6 @@ def send_reset_password_email():
 # ─────────────────────────────────────────────────────────────
 #  PROJECT ASSETS MANAGEMENT ENDPOINTS
 # ─────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────
-#  PROJECT ASSETS MANAGEMENT ENDPOINTS
-# ─────────────────────────────────────────────────────────────
 @app.route("/api/projects/<int:project_id>/assets", methods=["GET", "POST"])
 def manage_project_assets(project_id):
     if request.method == "GET":
@@ -1969,30 +1966,10 @@ def manage_project_assets(project_id):
         if supabase:
             try:
                 res = supabase.table("project_assets").select("*").eq("project_id", project_id).order("created_at", desc=True).execute()
-                if res.data:
+                if res.data is not None:
                     assets_list = res.data
             except Exception as e:
                 safe_print(f"[Project Assets DB Fetch Warning] {e}")
-
-        # Local disk fallback listing if DB is empty or offline
-        if not assets_list:
-            assets_dir = os.path.abspath(os.path.join(app.root_path, "uploads", "assets", str(project_id)))
-            if os.path.exists(assets_dir):
-                for idx, fname in enumerate(os.listdir(assets_dir)):
-                    fpath = os.path.join(assets_dir, fname)
-                    if os.path.isfile(fpath):
-                        ext = os.path.splitext(fname)[1].lower().replace('.', '')
-                        stat = os.stat(fpath)
-                        assets_list.append({
-                            "id": idx + 1000,
-                            "project_id": project_id,
-                            "asset_name": os.path.splitext(fname)[0],
-                            "original_filename": fname,
-                            "file_type": ext.upper() if ext else "FILE",
-                            "file_size": stat.st_size,
-                            "storage_path": fpath,
-                            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(stat.st_ctime))
-                        })
 
         return jsonify(assets_list), 200
 
@@ -2030,7 +2007,7 @@ def manage_project_assets(project_id):
 
             if supabase:
                 try:
-                    res = supabase.table("project_assets").insert(db_payload).select().execute()
+                    res = supabase.table("project_assets").insert(db_payload).execute()
                     if res.data:
                         asset_record = res.data[0]
                 except Exception as insert_err:
