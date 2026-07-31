@@ -2348,7 +2348,11 @@ export default function ProjectDetails({ projects, testCases, setTestCases, exec
                         {liveRunning ? "⏱️ Real-Time Execution Clock" : "Total Process Time"}
                       </p>
                       <p className="font-mono font-black text-sm text-amber-400 mt-0.5">
-                        {liveRunning ? `${liveTimerSec}s Live (Avg ~${estimatedTotalSec}s)` : `${selectedRun?.duration || estimatedTotalSec}s Process Duration`}
+                        {liveRunning ? (
+                          (estimatedTotalSec - liveTimerSec) >= 0
+                            ? `${estimatedTotalSec - liveTimerSec}s Remaining (Avg ~${estimatedTotalSec}s)`
+                            : `+${liveTimerSec - estimatedTotalSec}s Exceeded (Avg ~${estimatedTotalSec}s)`
+                        ) : `${selectedRun?.duration || estimatedTotalSec}s Process Duration`}
                       </p>
                     </div>
                   </div>

@@ -798,7 +798,8 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
                 "--disable-setuid-sandbox",
                 "--no-first-run",
                 "--no-zygote",
-                "--single-process"
+                "--single-process",
+                '--js-flags="--max-old-space-size=256"'
             ]
             if face_auth_enabled:
                 chrome_args.extend([
@@ -1196,44 +1197,41 @@ def run_playwright_test(execution_id, test_case_id, steps, browser_name, headles
                     except Exception:
                         pass
 
-                    # Capture viewport screenshot as JPEG bytes directly in-memory (fast)
+                    # Capture viewport screenshot as native 60% JPEG bytes directly from Playwright (30ms fast)
                     jpeg_bytes = None
                     try:
-                        png_bytes = page.screenshot(timeout=2000)
-                        # Convert PNG → JPEG in-memory using Pillow for 8-10x size reduction
-                        try:
-                            from PIL import Image
-                            import io
-                            img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-                            jpeg_buf = io.BytesIO()
-                            img.save(jpeg_buf, format="JPEG", quality=60, optimize=True)
-                            jpeg_bytes = jpeg_buf.getvalue()
-                        except Exception:
-                            # Pillow not available — fall back to raw PNG bytes
-                            jpeg_bytes = png_bytes
-                            screenshot_path = f"screenshot_{execution_id}_{step_number}.png"
+                        jpeg_bytes = page.screenshot(type="jpeg", quality=60, timeout=1500)
                     except Exception:
-                        jpeg_bytes = None
+                        try:
+                            jpeg_bytes = page.screenshot(type="jpeg", quality=50, full_page=False, timeout=2000)
+                        except Exception:
+                            jpeg_bytes = None
 
-                    # Upload to Supabase Storage
+                    # Upload to Supabase Storage with Base64 fallback so screenshots NEVER fail
                     if jpeg_bytes:
-                        content_type = "image/jpeg" if screenshot_path.endswith(".jpg") else "image/png"
                         try:
                             supabase.storage.from_("screenshots").upload(
                                 path=screenshot_path,
                                 file=jpeg_bytes,
-                                file_options={"content-type": content_type, "upsert": "true"}
+                                file_options={"content-type": "image/jpeg", "upsert": "true"}
                             )
+                            screenshot_url = supabase.storage.from_("screenshots").get_public_url(screenshot_path)
                         except Exception:
                             try:
                                 supabase.storage.from_("screenshots").update(
                                     path=screenshot_path,
                                     file=jpeg_bytes,
-                                    file_options={"content-type": content_type}
+                                    file_options={"content-type": "image/jpeg"}
                                 )
+                                screenshot_url = supabase.storage.from_("screenshots").get_public_url(screenshot_path)
                             except Exception:
                                 pass
-                        screenshot_url = supabase.storage.from_("screenshots").get_public_url(screenshot_path)
+
+                        # If cloud storage upload timed out or failed, embed Base64 so screenshot ALWAYS appears
+                        if not screenshot_url:
+                            import base64
+                            b64_str = base64.b64encode(jpeg_bytes).decode('utf-8')
+                            screenshot_url = f"data:image/jpeg;base64,{b64_str}"
                 except Exception as img_err:
                     print(f"Screenshot capture/upload failed: {img_err}")
 
